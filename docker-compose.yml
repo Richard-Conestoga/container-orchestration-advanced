@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: user_db
+    restart: unless-stopped
+    
+    user: postgres
+    
+    environment:
+      POSTGRES_DB: ${DB_NAME:-userdb}
+      POSTGRES_USER: ${DB_USER:-appuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
+    
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    networks:
+      - app_network
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-appuser} -d ${DB_NAME:-userdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: user_api
+    restart: unless-stopped
+    
+    
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-userdb}
+      DB_USER: ${DB_USER:-appuser}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      FLASK_ENV: production
+    
+    ports:
+      - "5000:5000"
+    
+    volumes:
+      - app_logs:/app/logs
+    
+    networks:
+      - app_network
+    
+    depends_on:
+      db:
+        condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+volumes:
+  db_data:
+    driver: local
+  app_logs:
+    driver: local
+
+networks:
+  app_network:
+    driver: bridge
