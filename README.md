@@ -909,7 +909,7 @@ docker-compose exec web whoami
 services:
   web:
     volumes:
-      - ./app.py:/app/app.py  # Hot reload
+      - ./web_app.py:/app/web_app.py  # Hot reload
     environment:
       FLASK_ENV: development
 ```
